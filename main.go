@@ -208,6 +208,14 @@ func computeTurns(ants int, lengths []int) int {
 	}
 }
 
+func sum(v []int) int {
+	s := 0
+	for _, x := range v {
+		s += x
+	}
+	return s
+}
+
 type antState struct {
 	id   int
 	path int
@@ -238,17 +246,28 @@ func assignPaths(paths [][]*Room, ants int) []int {
 		lengths[i] = len(p) - 1
 	}
 
-	order := make([]int, ants)
-	assigned := make([]int, n)
-	for k := 0; k < ants; k++ {
-		best := 0
-		for i := 1; i < n; i++ {
-			if lengths[i]+assigned[i] < lengths[best]+assigned[best] {
-				best = i
+	turns := computeTurns(ants, lengths)
+	counts := make([]int, n)
+	for i, l := range lengths {
+		if turns >= l {
+			counts[i] = turns - l + 1
+		}
+	}
+	for sum(counts) > ants {
+		idx := n - 1
+		for idx > 0 && counts[idx] == 0 {
+			idx--
+		}
+		counts[idx]--
+	}
+
+	var order []int
+	for step := 0; len(order) < ants; step++ {
+		for i := 0; i < n; i++ {
+			if step < counts[i] {
+				order = append(order, i)
 			}
 		}
-		assigned[best]++
-		order[k] = best
 	}
 	return order
 }
