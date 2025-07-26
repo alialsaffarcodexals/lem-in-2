@@ -362,20 +362,19 @@ func main() {
 		fmt.Println(err.Error())
 		return
 	}
+	paths := findPaths(graph)
+	if len(paths) == 0 {
+		fmt.Println("ERROR: invalid data format")
+		return
+	}
 	for _, l := range lines {
 		fmt.Println(l)
 	}
-	paths := findPaths(graph)
 	if os.Getenv("DEBUG") == "1" {
 		for i, p := range paths {
 			fmt.Fprintln(os.Stderr, i, pathNames(p))
 		}
 	}
-	if len(paths) == 0 {
-		fmt.Println("ERROR: invalid data format")
-		return
-	}
-
 	for _, move := range simulateMulti(graph, paths) {
 		fmt.Println(move)
 	}
