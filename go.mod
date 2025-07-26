@@ -1,3 +1,4 @@
-module lemin
 
-go 1.20
+module lem-in
+
+go 1.24.3
