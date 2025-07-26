@@ -1,0 +1,7 @@
+# Ignore Go binaries and temporary files
+lem-in
+*.exe
+*.test
+*.out
+*.tmp
+/tmp/
