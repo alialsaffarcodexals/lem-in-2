@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"sort"
 	"strconv"
 	"strings"
 )
@@ -109,28 +108,56 @@ func parseInput(path string) (*Graph, []string, error) {
 	return g, lines, nil
 }
 
-func allPaths(start, end *Room, limit int) [][]*Room {
-	var paths [][]*Room
-	var dfs func(*Room, map[*Room]bool, []*Room)
-	dfs = func(cur *Room, visited map[*Room]bool, path []*Room) {
-		if len(path) > limit {
-			return
+// bfs finds the shortest path from start to end while avoiding nodes in banned
+// (except for start and end themselves). The neighbors are explored in the
+// order they appear in the input so the resulting paths match the examples.
+func bfs(start, end *Room, banned map[*Room]bool) []*Room {
+	type item struct {
+		r    *Room
+		prev *item
+	}
+	q := []*item{{r: start}}
+	visited := map[*Room]bool{start: true}
+	for len(q) > 0 {
+		it := q[0]
+		q = q[1:]
+		if it.r == end {
+			var rev []*Room
+			for p := it; p != nil; p = p.prev {
+				rev = append(rev, p.r)
+			}
+			path := make([]*Room, len(rev))
+			for i := range rev {
+				path[i] = rev[len(rev)-1-i]
+			}
+			return path
 		}
-		if cur == end {
-			cp := append([]*Room{}, path...)
-			paths = append(paths, cp)
-			return
-		}
-		visited[cur] = true
-		// explore neighbors in the input order to match example outputs
-		for _, nb := range cur.Links {
-			if !visited[nb] {
-				dfs(nb, visited, append(path, nb))
+		for _, nb := range it.r.Links {
+			if (nb == end || !banned[nb]) && !visited[nb] {
+				visited[nb] = true
+				q = append(q, &item{r: nb, prev: it})
 			}
 		}
-		delete(visited, cur)
 	}
-	dfs(start, map[*Room]bool{}, []*Room{start})
+	return nil
+}
+
+// gatherPaths repeatedly searches for the shortest path while removing the
+// intermediate rooms of each discovered path. This yields a set of disjoint
+// paths ordered by their discovery order.
+func gatherPaths(g *Graph) [][]*Room {
+	banned := map[*Room]bool{}
+	var paths [][]*Room
+	for {
+		p := bfs(g.Start, g.End, banned)
+		if p == nil {
+			break
+		}
+		paths = append(paths, p)
+		for _, r := range p[1 : len(p)-1] {
+			banned[r] = true
+		}
+	}
 	return paths
 }
 
@@ -143,47 +170,26 @@ func disjoint(p []*Room, used map[*Room]bool) bool {
 	return true
 }
 
+// findPaths gathers disjoint paths and selects the prefix that minimises the
+// number of turns required to send all ants across the colony.
 func findPaths(g *Graph) [][]*Room {
-	candidates := allPaths(g.Start, g.End, 20)
+	all := gatherPaths(g)
 	var best [][]*Room
 	bestTurns := 1<<31 - 1
-	var explore func(int, [][]*Room, map[*Room]bool)
-	explore = func(idx int, cur [][]*Room, used map[*Room]bool) {
-		if idx == len(candidates) {
-			if len(cur) == 0 {
-				return
-			}
-			lengths := make([]int, len(cur))
-			for i, p := range cur {
-				lengths[i] = len(p) - 1
-			}
-			t := computeTurns(g.Ants, lengths)
-			if t < bestTurns {
-				bestTurns = t
-				best = append([][]*Room{}, cur...)
-			}
-			return
+	for i := 1; i <= len(all); i++ {
+		subset := all[:i]
+		lengths := make([]int, i)
+		for j, p := range subset {
+			lengths[j] = len(p) - 1
 		}
-		p := candidates[idx]
-		if disjoint(p, used) {
-			for _, r := range p[1 : len(p)-1] {
-				used[r] = true
-			}
-			explore(idx+1, append(cur, p), used)
-			for _, r := range p[1 : len(p)-1] {
-				delete(used, r)
-			}
+		t := computeTurns(g.Ants, lengths)
+		if t <= bestTurns {
+			bestTurns = t
+			best = append([][]*Room{}, subset...)
+		} else {
+			break
 		}
-		// skip
-		explore(idx+1, cur, used)
 	}
-	explore(0, nil, map[*Room]bool{})
-	sort.SliceStable(best, func(i, j int) bool {
-		if len(best[i]) == len(best[j]) {
-			return i < j
-		}
-		return len(best[i]) < len(best[j])
-	})
 	return best
 }
 
@@ -215,6 +221,9 @@ func pathNames(p []*Room) []string {
 	return names
 }
 
+// distributeAnts calculates how many ants each path should receive based on the
+// optimal number of turns and returns an ordered assignment list. At most one
+// ant is spawned on a path per turn.
 func distributeAnts(paths [][]*Room, ants int) []int {
 	n := len(paths)
 	lengths := make([]int, n)
