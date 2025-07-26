@@ -10,6 +10,9 @@ import (
 	"strings"
 )
 
+// maxPaths limits the number of candidate paths explored when searching the graph.
+const maxPaths = 100
+
 type Room struct {
 	Name  string
 	X, Y  int
@@ -250,7 +253,7 @@ func bestDisjointPaths(all [][]*Room, ants int) [][]*Room {
 // findPaths gathers disjoint paths and selects the prefix that minimises the
 // number of turns required to send all ants across the colony.
 func findPaths(g *Graph) [][]*Room {
-	all := allPaths(g, 100)
+	all := allPaths(g, maxPaths)
 	sort.SliceStable(all, func(i, j int) bool {
 		li, lj := len(all[i]), len(all[j])
 		if li == lj {
