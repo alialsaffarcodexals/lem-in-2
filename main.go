@@ -150,46 +150,115 @@ func bfs(start, end *Room, banned map[*Room]bool) []*Room {
 	return nil
 }
 
+func allPaths(g *Graph, limit int) [][]*Room {
+	var res [][]*Room
+	path := []*Room{}
+	visited := map[*Room]bool{}
+	var dfs func(*Room)
+	dfs = func(r *Room) {
+		if len(res) >= limit {
+			return
+		}
+		if r == g.End {
+			p := append(append([]*Room{}, path...), r)
+			res = append(res, p)
+			return
+		}
+		visited[r] = true
+		path = append(path, r)
+		for _, nb := range r.Links {
+			if !visited[nb] {
+				dfs(nb)
+			}
+		}
+		path = path[:len(path)-1]
+		visited[r] = false
+	}
+	dfs(g.Start)
+	return res
+}
+
+func bestDisjointPaths(all [][]*Room, ants int) [][]*Room {
+	bestTurns := 1<<31 - 1
+	var best [][]*Room
+	var bestIdx []int
+	var rec func(int, [][]*Room, []int, map[*Room]bool)
+	rec = func(i int, cur [][]*Room, idxs []int, used map[*Room]bool) {
+		if i == len(all) {
+			if len(cur) == 0 {
+				return
+			}
+			lengths := make([]int, len(cur))
+			for j, p := range cur {
+				lengths[j] = len(p) - 1
+			}
+			t := computeTurns(ants, lengths)
+			better := false
+			if t < bestTurns {
+				better = true
+			} else if t == bestTurns {
+				if len(cur) > len(best) {
+					better = true
+				} else if len(cur) == len(best) {
+					for k := 0; k < len(idxs) && k < len(bestIdx); k++ {
+						if idxs[k] < bestIdx[k] {
+							better = true
+							break
+						} else if idxs[k] > bestIdx[k] {
+							break
+						}
+					}
+				}
+			}
+			if better {
+				bestTurns = t
+				best = append([][]*Room{}, cur...)
+				bestIdx = append([]int{}, idxs...)
+			}
+			return
+		}
+		// skip current path
+		rec(i+1, cur, idxs, used)
+
+		// try including current path if disjoint
+		p := all[i]
+		valid := true
+		for _, r := range p[1 : len(p)-1] {
+			if used[r] {
+				valid = false
+				break
+			}
+		}
+		if valid {
+			for _, r := range p[1 : len(p)-1] {
+				used[r] = true
+			}
+			rec(i+1, append(cur, p), append(idxs, i), used)
+			for _, r := range p[1 : len(p)-1] {
+				delete(used, r)
+			}
+		}
+	}
+	rec(0, nil, nil, map[*Room]bool{})
+	return best
+}
+
 // gatherPaths repeatedly searches for the shortest path while removing the
 // intermediate rooms of each discovered path. This yields a set of disjoint
 // paths ordered by their discovery order.
-func gatherPaths(g *Graph) [][]*Room {
-	banned := map[*Room]bool{}
-	var paths [][]*Room
-	for {
-		p := bfs(g.Start, g.End, banned)
-		if p == nil {
-			break
-		}
-		paths = append(paths, p)
-		for _, r := range p[1 : len(p)-1] {
-			banned[r] = true
-		}
-	}
-	return paths
-}
 
 // findPaths gathers disjoint paths and selects the prefix that minimises the
 // number of turns required to send all ants across the colony.
 func findPaths(g *Graph) [][]*Room {
-	all := gatherPaths(g)
-	var best [][]*Room
-	bestTurns := 1<<31 - 1
-	for i := 1; i <= len(all); i++ {
-		subset := all[:i]
-		lengths := make([]int, i)
-		for j, p := range subset {
-			lengths[j] = len(p) - 1
+	all := allPaths(g, 100)
+	sort.SliceStable(all, func(i, j int) bool {
+		li, lj := len(all[i]), len(all[j])
+		if li == lj {
+			return i < j
 		}
-		t := computeTurns(g.Ants, lengths)
-		if t <= bestTurns {
-			bestTurns = t
-			best = append([][]*Room{}, subset...)
-		} else {
-			break
-		}
-	}
-	return best
+		return li < lj
+	})
+	return bestDisjointPaths(all, g.Ants)
 }
 
 func computeTurns(ants int, lengths []int) int {
@@ -233,10 +302,9 @@ func pathNames(p []*Room) []string {
 // ant is spawned on a path per turn.
 // distributeAnts calculates how many ants each path should receive based on the
 // optimal turn count. It returns a slice with the number of ants per path.
-// assignPaths returns, for each ant in numeric order, the index of the path it
-// should take. Ants are assigned one by one to the path that minimises the sum
-// of its length and the number of ants already assigned to it. This approach
-// reproduces the distribution visible in the official examples.
+// assignPaths distributes ants based on the optimal turn count computed from
+// the path lengths. Ants are spawned in a round-robin fashion starting from the
+// shortest path so that no path launches more than one ant per turn.
 func assignPaths(paths [][]*Room, ants int) []int {
 	n := len(paths)
 	lengths := make([]int, n)
@@ -251,20 +319,40 @@ func assignPaths(paths [][]*Room, ants int) []int {
 			counts[i] = turns - l + 1
 		}
 	}
-	for sum(counts) > ants {
-		idx := n - 1
-		for idx > 0 && counts[idx] == 0 {
-			idx--
+	excess := sum(counts) - ants
+	idx := n - 1
+	for excess > 0 {
+		if counts[idx] > 0 {
+			counts[idx]--
+			excess--
 		}
-		counts[idx]--
+		idx--
+		if idx < 0 {
+			idx = n - 1
+		}
+	}
+
+	start := 0
+	for i := 1; i < n; i++ {
+		if lengths[i] < lengths[start] {
+			start = i
+		}
 	}
 
 	var order []int
-	for step := 0; len(order) < ants; step++ {
-		for i := 0; i < n; i++ {
-			if step < counts[i] {
+	base := lengths[start]
+	for step := 0; ; step++ {
+		added := false
+		for j := 0; j < n; j++ {
+			i := (j + start) % n
+			offset := lengths[i] - base
+			if step >= offset && step-offset < counts[i] {
 				order = append(order, i)
+				added = true
 			}
+		}
+		if !added {
+			break
 		}
 	}
 	return order
