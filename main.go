@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -108,65 +109,202 @@ func parseInput(path string) (*Graph, []string, error) {
 	return g, lines, nil
 }
 
-func bfs(start, end *Room) []*Room {
-	type node struct {
-		r *Room
-		p *node
-	}
-	visited := map[*Room]bool{start: true}
-	queue := []node{{r: start}}
-	for len(queue) > 0 {
-		n := queue[0]
-		queue = queue[1:]
-		if n.r == end {
-			var path []*Room
-			for cur := &n; cur != nil; cur = cur.p {
-				path = append([]*Room{cur.r}, path...)
-			}
-			return path
+func allPaths(start, end *Room, limit int) [][]*Room {
+	var paths [][]*Room
+	var dfs func(*Room, map[*Room]bool, []*Room)
+	dfs = func(cur *Room, visited map[*Room]bool, path []*Room) {
+		if len(path) > limit {
+			return
 		}
-		for _, nb := range n.r.Links {
+		if cur == end {
+			cp := append([]*Room{}, path...)
+			paths = append(paths, cp)
+			return
+		}
+		visited[cur] = true
+		// explore neighbors in alphabetical order for determinism
+		sort.Slice(cur.Links, func(i, j int) bool { return cur.Links[i].Name < cur.Links[j].Name })
+		for _, nb := range cur.Links {
 			if !visited[nb] {
-				visited[nb] = true
-				queue = append(queue, node{r: nb, p: &n})
+				dfs(nb, visited, append(path, nb))
 			}
 		}
+		delete(visited, cur)
 	}
-	return nil
+	dfs(start, map[*Room]bool{}, []*Room{start})
+	return paths
 }
 
-func simulate(g *Graph, path []*Room) []string {
-	if len(path) < 2 {
+func disjoint(p []*Room, used map[*Room]bool) bool {
+	for _, r := range p[1 : len(p)-1] {
+		if used[r] {
+			return false
+		}
+	}
+	return true
+}
+
+func findPaths(g *Graph) [][]*Room {
+	candidates := allPaths(g.Start, g.End, 20)
+	var best [][]*Room
+	bestTurns := 1<<31 - 1
+	var explore func(int, [][]*Room, map[*Room]bool)
+	explore = func(idx int, cur [][]*Room, used map[*Room]bool) {
+		if idx == len(candidates) {
+			if len(cur) == 0 {
+				return
+			}
+			lengths := make([]int, len(cur))
+			for i, p := range cur {
+				lengths[i] = len(p) - 1
+			}
+			t := computeTurns(g.Ants, lengths)
+			if t < bestTurns {
+				bestTurns = t
+				best = append([][]*Room{}, cur...)
+			}
+			return
+		}
+		p := candidates[idx]
+		if disjoint(p, used) {
+			for _, r := range p[1 : len(p)-1] {
+				used[r] = true
+			}
+			explore(idx+1, append(cur, p), used)
+			for _, r := range p[1 : len(p)-1] {
+				delete(used, r)
+			}
+		}
+		// skip
+		explore(idx+1, cur, used)
+	}
+	explore(0, nil, map[*Room]bool{})
+	sort.Slice(best, func(i, j int) bool {
+		if len(best[i]) == len(best[j]) {
+			return strings.Join(pathNames(best[i]), " ") < strings.Join(pathNames(best[j]), " ")
+		}
+		return len(best[i]) < len(best[j])
+	})
+	return best
+}
+
+func computeTurns(ants int, lengths []int) int {
+	for t := 1; ; t++ {
+		total := 0
+		for _, l := range lengths {
+			if t-l >= 0 {
+				total += t - l + 1
+			}
+		}
+		if total >= ants {
+			return t
+		}
+	}
+}
+
+func assignAnts(ants int, lengths []int, turns int) []int {
+	assigns := make([]int, len(lengths))
+	for i, l := range lengths {
+		if turns-l >= 0 {
+			assigns[i] = turns - l + 1
+		}
+	}
+	sum := 0
+	for _, a := range assigns {
+		sum += a
+	}
+	for sum > ants {
+		for i := len(assigns) - 1; i >= 0 && sum > ants; i-- {
+			if assigns[i] > 0 {
+				assigns[i]--
+				sum--
+			}
+		}
+	}
+	return assigns
+}
+
+type antState struct {
+	id   int
+	path int
+	pos  int
+}
+
+func pathNames(p []*Room) []string {
+	names := make([]string, len(p))
+	for i, r := range p {
+		names[i] = r.Name
+	}
+	return names
+}
+
+func simulateMulti(g *Graph, paths [][]*Room) []string {
+	if len(paths) == 0 {
 		return nil
 	}
-	positions := make([]int, len(path)) // 0 means empty
-	moves := []string{}
-	antsAtEnd := 0
+	lengths := make([]int, len(paths))
+	for i, p := range paths {
+		lengths[i] = len(p) - 1
+	}
+	turns := computeTurns(g.Ants, lengths)
+	assigns := assignAnts(g.Ants, lengths, turns)
+
+	var moves []string
+	occupancy := map[*Room]int{}
+	var active []antState
 	nextAnt := 1
-	for antsAtEnd < g.Ants {
-		turn := []string{}
-		// move ants from end backwards
-		for i := len(path) - 1; i > 0; i-- {
-			if positions[i-1] != 0 && (i == len(path)-1 || positions[i] == 0) {
-				positions[i] = positions[i-1]
-				turn = append(turn, fmt.Sprintf("L%d-%s", positions[i], path[i].Name))
-				positions[i-1] = 0
-				if i == len(path)-1 {
-					antsAtEnd++
+	remaining := g.Ants
+	for remaining > 0 || len(active) > 0 {
+		var line []string
+
+		// move existing ants
+		for i := range active {
+			a := &active[i]
+			path := paths[a.path]
+			if a.pos < len(path)-1 {
+				nextRoom := path[a.pos+1]
+				if nextRoom == g.End || occupancy[nextRoom] == 0 {
+					if path[a.pos] != g.Start {
+						delete(occupancy, path[a.pos])
+					}
+					a.pos++
+					if nextRoom != g.End {
+						occupancy[nextRoom] = a.id
+					}
+					line = append(line, fmt.Sprintf("L%d-%s", a.id, nextRoom.Name))
 				}
 			}
 		}
-		// spawn new ant into path[1]
-		if nextAnt <= g.Ants && positions[1] == 0 {
-			positions[1] = nextAnt
-			turn = append(turn, fmt.Sprintf("L%d-%s", nextAnt, path[1].Name))
-			if len(path) == 2 {
-				antsAtEnd++
+
+		// remove finished ants
+		j := 0
+		for _, a := range active {
+			if a.pos < len(paths[a.path])-1 {
+				active[j] = a
+				j++
 			}
-			nextAnt++
 		}
-		if len(turn) > 0 {
-			moves = append(moves, strings.Join(turn, " "))
+		active = active[:j]
+
+		// spawn new ants
+		for i, p := range paths {
+			if assigns[i] > 0 && nextAnt <= g.Ants {
+				nextRoom := p[1]
+				if nextRoom == g.End || occupancy[nextRoom] == 0 {
+					active = append(active, antState{id: nextAnt, path: i, pos: 1})
+					if nextRoom != g.End {
+						occupancy[nextRoom] = nextAnt
+					}
+					line = append(line, fmt.Sprintf("L%d-%s", nextAnt, nextRoom.Name))
+					assigns[i]--
+					nextAnt++
+					remaining--
+				}
+			}
+		}
+
+		if len(line) > 0 {
+			moves = append(moves, strings.Join(line, " "))
 		}
 	}
 	return moves
@@ -185,12 +323,13 @@ func main() {
 	for _, l := range lines {
 		fmt.Println(l)
 	}
-	path := bfs(graph.Start, graph.End)
-	if path == nil {
+	paths := findPaths(graph)
+	if len(paths) == 0 {
 		fmt.Println("ERROR: invalid data format")
 		return
 	}
-	for _, move := range simulate(graph, path) {
+
+	for _, move := range simulateMulti(graph, paths) {
 		fmt.Println(move)
 	}
 }
