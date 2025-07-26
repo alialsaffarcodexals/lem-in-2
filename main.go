@@ -224,6 +224,8 @@ func pathNames(p []*Room) []string {
 // distributeAnts calculates how many ants each path should receive based on the
 // optimal number of turns and returns an ordered assignment list. At most one
 // ant is spawned on a path per turn.
+// distributeAnts calculates how many ants each path should receive based on the
+// optimal turn count. It returns a slice with the number of ants per path.
 func distributeAnts(paths [][]*Room, ants int) []int {
 	n := len(paths)
 	lengths := make([]int, n)
@@ -250,54 +252,52 @@ func distributeAnts(paths [][]*Room, ants int) []int {
 			}
 		}
 	}
+	return counts
+}
 
-	offsets := make([]int, n)
-	base := lengths[0]
-	for i := 0; i < n; i++ {
-		offsets[i] = lengths[i] - base
-	}
-
-	assigned := make([]int, n)
-	assignment := make([]int, 0, ants)
-	for len(assignment) < ants {
-		best := -1
-		bestVal := 0
-		for i := 0; i < n; i++ {
-			if assigned[i] >= counts[i] {
-				continue
-			}
-			val := offsets[i] + assigned[i]
-			if best == -1 || val < bestVal || (val == bestVal && offsets[i] > offsets[best]) {
-				best = i
-				bestVal = val
+// spawnOrder generates a sequence of path indexes representing when each ant
+// should be spawned using a round-robin allocation based on the counts.
+func spawnOrder(counts []int) []int {
+	rem := append([]int(nil), counts...)
+	order := []int{}
+	for {
+		progressed := false
+		for i := 0; i < len(rem); i++ {
+			if rem[i] > 0 {
+				order = append(order, i)
+				rem[i]--
+				progressed = true
 			}
 		}
-		if best == -1 {
+		if !progressed {
 			break
 		}
-		assignment = append(assignment, best)
-		assigned[best]++
 	}
-	return assignment
+	return order
 }
 
 func simulateMulti(g *Graph, paths [][]*Room) []string {
 	if len(paths) == 0 {
 		return nil
 	}
-	assignment := distributeAnts(paths, g.Ants)
-	pos := make([]int, len(assignment))
+	counts := distributeAnts(paths, g.Ants)
+	order := spawnOrder(counts)
+	pos := make([]int, len(order))
+	route := make([]int, len(order))
+	for i, idx := range order {
+		route[i] = idx
+	}
 	occupancy := map[*Room]int{}
 	started := 0
 	finished := 0
 	var moves []string
 
-	for finished < len(assignment) {
+	for finished < len(order) {
 		var line []string
 
 		// move ants already in motion
 		for i := 0; i < started; i++ {
-			p := paths[assignment[i]]
+			p := paths[route[i]]
 			if pos[i] < len(p)-1 {
 				next := p[pos[i]+1]
 				if next == g.End || occupancy[next] == 0 {
@@ -317,8 +317,8 @@ func simulateMulti(g *Graph, paths [][]*Room) []string {
 
 		// spawn new ants in order
 		spawned := make(map[int]bool)
-		for started < len(assignment) {
-			idx := assignment[started]
+		for started < len(order) {
+			idx := route[started]
 			if spawned[idx] {
 				break
 			}
