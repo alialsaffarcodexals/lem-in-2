@@ -2,7 +2,7 @@ lem-in
 Objectives
 This project is meant to make you code a digital version of an ant farm.
 
-Create a program lem-in that will read from a file (describing the ants and the colony) given in the arguments.
+Create a program lem-in that will read from a file (describing the ants and the colony) given in the arguments. Several ready to use input files are provided under the `examples/` directory. Run `go run . examples/example00.txt` to see the solver in action.
 
 Upon successfully finding the quickest path, lem-in will display the content of the file passed as argument and each move the ants make from room to room.
 

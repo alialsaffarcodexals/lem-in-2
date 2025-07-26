@@ -13,13 +13,19 @@ type Room struct {
 	y    int
 }
 
-func main() {
-	if len(os.Args) != 2 {
-		fmt.Println("Usage: go run . <file>")
-		return
-	}
-	filename := os.Args[1]
-	content, err := os.ReadFile(filename)
+
+type Graph struct {
+	Ants  int
+	Rooms map[string]*Room
+	Start *Room
+	End   *Room
+}
+
+const maxPaths = 100
+
+func parseInput(path string) (*Graph, []string, error) {
+	file, err := os.Open(path)
+
 	if err != nil {
 		fmt.Println("ERROR: invalid data format")
 		return
@@ -62,22 +68,44 @@ func main() {
 		}
 		if strings.Contains(line, "-") { // link
 			parts := strings.Split(line, "-")
-			if len(parts) != 2 {
-				fmt.Println("ERROR: invalid data format")
-				return
-			}
-			a, b := parts[0], parts[1]
-			if rooms[a] == nil || rooms[b] == nil {
-				fmt.Println("ERROR: invalid data format")
-				return
-			}
-			graph[a] = append(graph[a], b)
-			graph[b] = append(graph[b], a)
-			continue
+
+			links = append(links, [2]string{parts[0], parts[1]})
+		} else {
+			return nil, lines, errors.New("ERROR: invalid data format")
 		}
-		fields := strings.Fields(line)
-		if len(fields) != 3 {
-			fmt.Println("ERROR: invalid data format")
+	}
+	if scanner.Err() != nil {
+		return nil, lines, scanner.Err()
+	}
+
+	if g.Start == nil || g.End == nil || g.Ants <= 0 {
+		return nil, lines, errors.New("ERROR: invalid data format")
+	}
+
+	for _, l := range links {
+		a, ok1 := g.Rooms[l[0]]
+		b, ok2 := g.Rooms[l[1]]
+		if !ok1 || !ok2 {
+			return nil, lines, errors.New("ERROR: invalid data format")
+		}
+		a.Links = append(a.Links, b)
+		b.Links = append(b.Links, a)
+	}
+	return g, lines, nil
+}
+
+func allPaths(g *Graph, limit int) [][]*Room {
+	var res [][]*Room
+	path := []*Room{}
+	visited := map[*Room]bool{}
+	var dfs func(*Room)
+	dfs = func(r *Room) {
+		if len(res) >= limit {
+			return
+		}
+		if r == g.End {
+			p := append(append([]*Room{}, path...), r)
+			res = append(res, p)
 			return
 		}
 		x, err1 := strconv.Atoi(fields[1])
@@ -97,6 +125,29 @@ func main() {
 		prevIsStart = false
 		prevIsEnd = false
 	}
+
+	rec(0, nil, nil, map[*Room]bool{})
+	return best
+}
+
+// gatherPaths repeatedly searches for the shortest path while removing the
+// intermediate rooms of each discovered path. This yields a set of disjoint
+// paths ordered by their discovery order.
+
+// findPaths gathers disjoint paths and selects the prefix that minimises the
+// number of turns required to send all ants across the colony.
+func findPaths(g *Graph) [][]*Room {
+	all := allPaths(g, maxPaths)
+	sort.SliceStable(all, func(i, j int) bool {
+		li, lj := len(all[i]), len(all[j])
+		if li == lj {
+			return i < j
+		}
+		return li < lj
+	})
+	return bestDisjointPaths(all, g.Ants)
+}
+
 
 	if start == "" || end == "" {
 		fmt.Println("ERROR: invalid data format")
