@@ -7,6 +7,7 @@ import (
 	"testing"
 )
 
+
 func TestExamplesTurns(t *testing.T) {
 	cases := []struct {
 		file string
@@ -35,6 +36,7 @@ func TestExamplesTurns(t *testing.T) {
 		}
 	}
 }
+
 
 func TestParseInputErrors(t *testing.T) {
 	cases := []struct {
@@ -70,3 +72,4 @@ func TestParseInputErrors(t *testing.T) {
 		}
 	}
 }
+

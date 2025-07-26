@@ -1,6 +1,7 @@
 package main
 
 import (
+
 	"bufio"
 	"errors"
 	"fmt"
@@ -11,10 +12,12 @@ import (
 )
 
 type Room struct {
+
 	Name  string
 	X, Y  int
 	Links []*Room
 }
+
 
 type Graph struct {
 	Ants  int
@@ -22,6 +25,7 @@ type Graph struct {
 	Start *Room
 	End   *Room
 }
+
 
 const (
 	maxPaths = 100
@@ -107,6 +111,7 @@ func parseInput(path string) (*Graph, []string, error) {
 			if parts[0] == parts[1] {
 				return nil, lines, errors.New("ERROR: invalid data format")
 			}
+
 			links = append(links, [2]string{parts[0], parts[1]})
 		} else {
 			return nil, lines, errors.New("ERROR: invalid data format")
@@ -146,6 +151,7 @@ func allPaths(g *Graph, limit int) [][]*Room {
 			res = append(res, p)
 			return
 		}
+
 		visited[r] = true
 		path = append(path, r)
 		for _, nb := range r.Links {
@@ -220,6 +226,7 @@ func bestDisjointPaths(all [][]*Room, ants int) [][]*Room {
 			}
 		}
 	}
+
 	rec(0, nil, nil, map[*Room]bool{})
 	return best
 }
@@ -241,6 +248,7 @@ func findPaths(g *Graph) [][]*Room {
 	})
 	return bestDisjointPaths(all, g.Ants)
 }
+
 
 func computeTurns(ants int, lengths []int) int {
 	for t := 1; ; t++ {
@@ -435,5 +443,6 @@ func main() {
 	}
 	for _, move := range simulateMulti(graph, paths) {
 		fmt.Println(move)
+
 	}
 }
