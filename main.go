@@ -216,13 +216,14 @@ func pathNames(p []*Room) []string {
 }
 
 func distributeAnts(paths [][]*Room, ants int) []int {
-	lengths := make([]int, len(paths))
+	n := len(paths)
+	lengths := make([]int, n)
 	for i, p := range paths {
 		lengths[i] = len(p) - 1
 	}
 
 	turns := computeTurns(ants, lengths)
-	counts := make([]int, len(paths))
+	counts := make([]int, n)
 	for i, l := range lengths {
 		if turns-l >= 0 {
 			counts[i] = turns - l + 1
@@ -233,7 +234,7 @@ func distributeAnts(paths [][]*Room, ants int) []int {
 		total += c
 	}
 	for total > ants {
-		for i := len(counts) - 1; i >= 0 && total > ants; i-- {
+		for i := n - 1; i >= 0 && total > ants; i-- {
 			if counts[i] > 0 {
 				counts[i]--
 				total--
@@ -241,21 +242,32 @@ func distributeAnts(paths [][]*Room, ants int) []int {
 		}
 	}
 
+	offsets := make([]int, n)
+	base := lengths[0]
+	for i := 0; i < n; i++ {
+		offsets[i] = lengths[i] - base
+	}
+
+	assigned := make([]int, n)
 	assignment := make([]int, 0, ants)
-	for step := 0; ; step++ {
-		added := false
-		for i, c := range counts {
-			if step < c {
-				assignment = append(assignment, i)
-				added = true
-				if len(assignment) == ants {
-					return assignment
-				}
+	for len(assignment) < ants {
+		best := -1
+		bestVal := 0
+		for i := 0; i < n; i++ {
+			if assigned[i] >= counts[i] {
+				continue
+			}
+			val := offsets[i] + assigned[i]
+			if best == -1 || val < bestVal || (val == bestVal && offsets[i] > offsets[best]) {
+				best = i
+				bestVal = val
 			}
 		}
-		if !added {
+		if best == -1 {
 			break
 		}
+		assignment = append(assignment, best)
+		assigned[best]++
 	}
 	return assignment
 }
