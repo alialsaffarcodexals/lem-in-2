@@ -220,22 +220,44 @@ func distributeAnts(paths [][]*Room, ants int) []int {
 	for i, p := range paths {
 		lengths[i] = len(p) - 1
 	}
-	assigned := make([]int, len(paths))
-	result := make([]int, ants)
-	for a := 0; a < ants; a++ {
-		best := 0
-		bestScore := lengths[0] + assigned[0]
-		for i := 1; i < len(paths); i++ {
-			score := lengths[i] + assigned[i]
-			if score < bestScore {
-				best = i
-				bestScore = score
+
+	turns := computeTurns(ants, lengths)
+	counts := make([]int, len(paths))
+	for i, l := range lengths {
+		if turns-l >= 0 {
+			counts[i] = turns - l + 1
+		}
+	}
+	total := 0
+	for _, c := range counts {
+		total += c
+	}
+	for total > ants {
+		for i := len(counts) - 1; i >= 0 && total > ants; i-- {
+			if counts[i] > 0 {
+				counts[i]--
+				total--
 			}
 		}
-		result[a] = best
-		assigned[best]++
 	}
-	return result
+
+	assignment := make([]int, 0, ants)
+	for step := 0; ; step++ {
+		added := false
+		for i, c := range counts {
+			if step < c {
+				assignment = append(assignment, i)
+				added = true
+				if len(assignment) == ants {
+					return assignment
+				}
+			}
+		}
+		if !added {
+			break
+		}
+	}
+	return assignment
 }
 
 func simulateMulti(g *Graph, paths [][]*Room) []string {
@@ -273,12 +295,18 @@ func simulateMulti(g *Graph, paths [][]*Room) []string {
 		}
 
 		// spawn new ants in order
+		spawned := make(map[int]bool)
 		for started < len(assignment) {
-			p := paths[assignment[started]]
+			idx := assignment[started]
+			if spawned[idx] {
+				break
+			}
+			p := paths[idx]
 			next := p[1]
 			if next != g.End && occupancy[next] != 0 {
 				break
 			}
+			spawned[idx] = true
 			pos[started] = 1
 			if next != g.End {
 				occupancy[next] = started + 1
