@@ -33,42 +33,53 @@ func parseInput(path string) (*Graph, []string, error) {
 	g := &Graph{Rooms: make(map[string]*Room)}
 	var lines []string
 	scanner := bufio.NewScanner(file)
-	lineNum := 0
 	var pendingStart bool
 	var pendingEnd bool
 	var links [][2]string
+	parsedAnts := false
 
 	for scanner.Scan() {
 		line := scanner.Text()
 		lines = append(lines, line)
 		if strings.HasPrefix(line, "#") {
 			if line == "##start" {
+				if pendingStart || g.Start != nil {
+					return nil, lines, errors.New("ERROR: invalid data format")
+				}
 				pendingStart = true
 			} else if line == "##end" {
+				if pendingEnd || g.End != nil {
+					return nil, lines, errors.New("ERROR: invalid data format")
+				}
 				pendingEnd = true
 			}
 			continue
 		}
-		if lineNum == 0 {
+
+		if !parsedAnts {
 			ants, err := strconv.Atoi(strings.TrimSpace(line))
 			if err != nil || ants <= 0 {
 				return nil, lines, errors.New("ERROR: invalid data format")
 			}
 			g.Ants = ants
-			lineNum++
+			parsedAnts = true
 			continue
 		}
-		if strings.Count(line, " ") == 2 && !strings.Contains(line, "-") {
-			parts := strings.Split(line, " ")
-			if len(parts) != 3 {
+
+		fields := strings.Fields(line)
+		if len(fields) == 3 {
+			if strings.HasPrefix(fields[0], "L") || strings.HasPrefix(fields[0], "#") {
 				return nil, lines, errors.New("ERROR: invalid data format")
 			}
-			x, err1 := strconv.Atoi(parts[1])
-			y, err2 := strconv.Atoi(parts[2])
+			if _, ok := g.Rooms[fields[0]]; ok {
+				return nil, lines, errors.New("ERROR: invalid data format")
+			}
+			x, err1 := strconv.Atoi(fields[1])
+			y, err2 := strconv.Atoi(fields[2])
 			if err1 != nil || err2 != nil {
 				return nil, lines, errors.New("ERROR: invalid data format")
 			}
-			room := &Room{Name: parts[0], X: x, Y: y}
+			room := &Room{Name: fields[0], X: x, Y: y}
 			g.Rooms[room.Name] = room
 			if pendingStart {
 				g.Start = room
@@ -78,16 +89,12 @@ func parseInput(path string) (*Graph, []string, error) {
 				g.End = room
 				pendingEnd = false
 			}
-		} else if strings.Contains(line, "-") && !strings.Contains(line, " ") {
+		} else if strings.Count(line, "-") == 1 && !strings.Contains(line, " ") {
 			parts := strings.Split(line, "-")
-			if len(parts) != 2 {
-				return nil, lines, errors.New("ERROR: invalid data format")
-			}
 			links = append(links, [2]string{parts[0], parts[1]})
 		} else {
 			return nil, lines, errors.New("ERROR: invalid data format")
 		}
-		lineNum++
 	}
 	if scanner.Err() != nil {
 		return nil, lines, scanner.Err()
@@ -160,15 +167,6 @@ func gatherPaths(g *Graph) [][]*Room {
 		}
 	}
 	return paths
-}
-
-func disjoint(p []*Room, used map[*Room]bool) bool {
-	for _, r := range p[1 : len(p)-1] {
-		if used[r] {
-			return false
-		}
-	}
-	return true
 }
 
 // findPaths gathers disjoint paths and selects the prefix that minimises the
