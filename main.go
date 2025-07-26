@@ -23,6 +23,8 @@ type Graph struct {
 	End   *Room
 }
 
+const maxPaths = 100
+
 func parseInput(path string) (*Graph, []string, error) {
 	file, err := os.Open(path)
 	if err != nil {
@@ -114,40 +116,6 @@ func parseInput(path string) (*Graph, []string, error) {
 		b.Links = append(b.Links, a)
 	}
 	return g, lines, nil
-}
-
-// bfs finds the shortest path from start to end while avoiding nodes in banned
-// (except for start and end themselves). The neighbors are explored in the
-// order they appear in the input so the resulting paths match the examples.
-func bfs(start, end *Room, banned map[*Room]bool) []*Room {
-	type item struct {
-		r    *Room
-		prev *item
-	}
-	q := []*item{{r: start}}
-	visited := map[*Room]bool{start: true}
-	for len(q) > 0 {
-		it := q[0]
-		q = q[1:]
-		if it.r == end {
-			var rev []*Room
-			for p := it; p != nil; p = p.prev {
-				rev = append(rev, p.r)
-			}
-			path := make([]*Room, len(rev))
-			for i := range rev {
-				path[i] = rev[len(rev)-1-i]
-			}
-			return path
-		}
-		for _, nb := range it.r.Links {
-			if (nb == end || !banned[nb]) && !visited[nb] {
-				visited[nb] = true
-				q = append(q, &item{r: nb, prev: it})
-			}
-		}
-	}
-	return nil
 }
 
 func allPaths(g *Graph, limit int) [][]*Room {
@@ -250,7 +218,7 @@ func bestDisjointPaths(all [][]*Room, ants int) [][]*Room {
 // findPaths gathers disjoint paths and selects the prefix that minimises the
 // number of turns required to send all ants across the colony.
 func findPaths(g *Graph) [][]*Room {
-	all := allPaths(g, 100)
+	all := allPaths(g, maxPaths)
 	sort.SliceStable(all, func(i, j int) bool {
 		li, lj := len(all[i]), len(all[j])
 		if li == lj {
