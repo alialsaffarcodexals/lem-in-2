@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -256,60 +257,76 @@ func simulateMulti(g *Graph, paths [][]*Room) []string {
 	if len(paths) == 0 {
 		return nil
 	}
+
 	route := assignPaths(paths, g.Ants)
+	// build per-path queues of ants
+	queues := make([][]int, len(paths))
+	for ant, p := range route {
+		queues[p] = append(queues[p], ant)
+	}
+
 	pos := make([]int, len(route))
+	started := make([]bool, len(route))
 	occupancy := map[*Room]int{}
-	started := 0
 	finished := 0
 	var moves []string
 
 	for finished < len(route) {
-		var line []string
+		type evt struct {
+			id   int
+			room *Room
+		}
+		var evts []evt
 
-		// move ants already in motion
-		for i := 0; i < started; i++ {
-			p := paths[route[i]]
-			if pos[i] < len(p)-1 {
-				next := p[pos[i]+1]
+		// move ants already started in ID order
+		for id := 0; id < len(route); id++ {
+			if !started[id] {
+				continue
+			}
+			p := paths[route[id]]
+			if pos[id] < len(p)-1 {
+				next := p[pos[id]+1]
 				if next == g.End || occupancy[next] == 0 {
-					if p[pos[i]] != g.Start {
-						delete(occupancy, p[pos[i]])
+					if p[pos[id]] != g.Start {
+						delete(occupancy, p[pos[id]])
 					}
-					pos[i]++
+					pos[id]++
 					if next != g.End {
-						occupancy[next] = i + 1
+						occupancy[next] = id + 1
 					} else {
 						finished++
 					}
-					line = append(line, fmt.Sprintf("L%d-%s", i+1, next.Name))
+					evts = append(evts, evt{id: id + 1, room: next})
 				}
 			}
 		}
 
-		// spawn new ants in order
-		spawned := make(map[int]bool)
-		for started < len(route) {
-			idx := route[started]
-			if spawned[idx] {
-				break
+		// spawn at most one ant per path
+		for i, q := range queues {
+			if len(q) == 0 {
+				continue
 			}
-			p := paths[idx]
-			next := p[1]
-			if next != g.End && occupancy[next] != 0 {
-				break
+			ant := q[0]
+			next := paths[i][1]
+			if next == g.End || occupancy[next] == 0 {
+				started[ant] = true
+				pos[ant] = 1
+				if next != g.End {
+					occupancy[next] = ant + 1
+				} else {
+					finished++
+				}
+				queues[i] = q[1:]
+				evts = append(evts, evt{id: ant + 1, room: next})
 			}
-			spawned[idx] = true
-			pos[started] = 1
-			if next != g.End {
-				occupancy[next] = started + 1
-			} else {
-				finished++
-			}
-			line = append(line, fmt.Sprintf("L%d-%s", started+1, next.Name))
-			started++
 		}
 
-		if len(line) > 0 {
+		if len(evts) > 0 {
+			sort.Slice(evts, func(i, j int) bool { return evts[i].id < evts[j].id })
+			line := make([]string, len(evts))
+			for i, e := range evts {
+				line[i] = fmt.Sprintf("L%d-%s", e.id, e.room.Name)
+			}
 			moves = append(moves, strings.Join(line, " "))
 		}
 	}
