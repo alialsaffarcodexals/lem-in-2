@@ -3,6 +3,7 @@ package utils
 import "sort"
 
 func allPaths(g *Graph, limit int) [][]*Room {
+
 	var res [][]*Room
 	path := []*Room{}
 	visited := map[*Room]bool{}
@@ -159,4 +160,5 @@ func assignPaths(paths [][]*Room, ants int) []int {
 		}
 	}
 	return order
+
 }

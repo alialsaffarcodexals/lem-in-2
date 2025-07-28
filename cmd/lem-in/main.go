@@ -1,6 +1,7 @@
 package main
 
 import (
+
 	"fmt"
 	"os"
 
@@ -35,4 +36,5 @@ func main() {
 	for _, m := range utils.SimulateMulti(graph, paths) {
 		fmt.Println(m)
 	}
+
 }
