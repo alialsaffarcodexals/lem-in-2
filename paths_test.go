@@ -1,4 +1,5 @@
 
+
 package utils_test
 
 import (
@@ -8,7 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"lem-in/internal/utils"
+	"lem-in/utils"
+
 )
 
 func TestExamplesTurns(t *testing.T) {
@@ -83,7 +85,8 @@ func TestDuplicateLinkIsRejected(t *testing.T) {
 		t.Fatalf("write temp file: %v", err)
 	}
 	_, _, err := utils.ParseInput(path)
-	if err == nil || !strings.Contains(err.Error(), "duplicate link") {
+
+	if err == nil || !strings.Contains(err.Error(), "ERROR: invalid data format") || !strings.Contains(err.Error(), "Reason: duplicate link") {
 		t.Fatalf("expected duplicate link error, got %v", err)
 	}
 }
