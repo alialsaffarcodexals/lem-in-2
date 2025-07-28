@@ -1,11 +1,10 @@
 package main
 
 import (
-
 	"fmt"
 	"os"
 
-	"lem-in/internal/utils"
+	"lem-in/utils"
 )
 
 func main() {
@@ -36,5 +35,4 @@ func main() {
 	for _, m := range utils.SimulateMulti(graph, paths) {
 		fmt.Println(m)
 	}
-
 }

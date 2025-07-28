@@ -1,7 +1,6 @@
 package utils
 
 const (
-
 	MaxPaths = 100
 	MaxAnts  = 100000
 )
@@ -26,5 +25,4 @@ type LemError struct {
 
 func (e LemError) Error() string {
 	return e.Msg + "\nReason: " + e.Reason
-
 }

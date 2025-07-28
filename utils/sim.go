@@ -1,7 +1,6 @@
 package utils
 
 import (
-
 	"fmt"
 	"sort"
 	"strings"
@@ -82,5 +81,4 @@ func SimulateMulti(g *Graph, paths [][]*Room) []string {
 		}
 	}
 	return moves
-
 }

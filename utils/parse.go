@@ -1,7 +1,6 @@
 package utils
 
 import (
-
 	"bufio"
 	"os"
 	"strconv"
@@ -137,5 +136,4 @@ func hasNeighbor(r, other *Room) bool {
 		}
 	}
 	return false
-
 }
