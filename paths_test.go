@@ -1,3 +1,4 @@
+
 package utils_test
 
 import (
@@ -86,3 +87,4 @@ func TestDuplicateLinkIsRejected(t *testing.T) {
         t.Fatalf("expected duplicate link error, got %v", err)
     }
 }
+
