@@ -11,6 +11,9 @@ import (
 	"strings"
 )
 
+// maxPaths limits the number of candidate paths explored when searching the graph.
+const maxPaths = 100
+
 type Room struct {
 
 	Name  string
